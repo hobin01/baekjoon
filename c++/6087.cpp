@@ -1,161 +1,169 @@
-#define _CRT_SECURE_NO_WARNINGS
-#include<iostream>
-#include<algorithm>
-#include<vector>
-#include<queue>
-#include<cstring>
-#include<string>
-#include<cstdio>
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <queue>
+#include <cstring>
+#include <string>
 
 using namespace std;
+// êº¾ì´ëŠ” ìµœì†Œ ê°œìˆ˜ë§Œ ì°¾ìœ¼ë©´ ë¨ 
+// . : ë¹ˆ ì¹¸, * : ë²½, C : ë ˆì´ì €
 
 int w, h;
 char map[101][101];
-pair<int, int>p1 = { -1,-1 }; // cÀÇ ÇÑ Á¡
-pair<int, int>p2 = { -1,-1 }; // cÀÇ ´Ù¸¥ Á¡
-int dy[4] = { -1,1,0,0 };
-int dx[4] = { 0,0,-1,1 }; // »óÇÏÁÂ¿ì index = 0,1,2,3
-int check[101][101]; 
-// check : °Å¿ï ¼³Ä¡ °³¼ö
-// ÇØ´ç Á¡ÀÇ check°ªº¸´Ù ÀÛÀº °æ¿ì·Î µé¾î¿À¸é 
-// ÇØ´ç Á¡±îÁö ´õ Àû°Ô °Å¿ï ¼³Ä¡ÇÏ´Â °æ¿ì Á¸Àç
+bool visited[101][101];
+int corner[101][101][4];
+int dy[4] = {-1, 1, 0, 0}; 
+int dx[4] = {0, 0, -1, 1};
+// ìƒí•˜ì¢Œìš° : 0123
+pair<int, int> src = {-1, -1};
+pair<int, int> dst = {-1, -1};
 
-void make_map()
+void init()
 {
-	cin >> w >> h;
-	for (int i = 0; i < h; i++) {
-		for (int j = 0; j < w; j++) {
-			cin >> map[i][j];
-			if (map[i][j] == 'C') {
-				if (p1.first == -1) {
-					p1 = { i,j };
-				}
-				else {
-					p2 = { i,j };
-				}
-			}
-			check[i][j] = 987654321;
-		}
-	}
+  cin >> w >> h;
+  for(int i = 0; i < h; i++) {
+    for(int j = 0; j < w; j++) {
+      cin >> map[i][j];
+      visited[i][j] = false;
+      corner[i][j][0] = 987654321;
+      corner[i][j][1] = 987654321;
+      corner[i][j][2] = 987654321;
+      corner[i][j][3] = 987654321;
+      
+      if(map[i][j] == 'C') {
+        if(src.first == -1) {
+          src = {i, j};
+        }
+        else if(dst.first == -1) {
+          dst = {i, j};
+        }
+      }
+    }
+  }
 }
 
-// °¡´ÉÇÑ ºûÀÇ °æ·ÎÀÎÁö ÆÄ¾Ç
-// -1ÀÌ¸é ¾È µÇ´Â °æ¿ì
-// 0ÀÌ¸é Á÷ÁøÇÏ´Â °æ¿ì
-// 1ÀÌ¸é 90µµ·Î ²ªÀÌ´Â °æ¿ì
-int possible(int dir, int ndir)
+int changeDir(int dir1, int dir2)
 {
-	if (dir == 0 && ndir == 1)
-		return -1;
-	else if (dir == 1 && ndir == 0)
-		return -1;
-	else if (dir == 2 && ndir == 3)
-		return -1;
-	else if (dir == 3 && ndir == 2)
-		return -1;
-	else if (dir == ndir)
-		return 0;
-	else
-		return 1;
+  // 0 : ë°©í–¥ ê·¸ëŒ€ë¡œ
+  // -1 : ìƒí•˜, ì¢Œìš° : ë¶ˆê°€ëŠ¥
+  // 1 : êº¾ì´ëŠ” ê²½ìš°
+  if(dir1 == dir2)
+    return 0;
+
+  // ìƒí•˜, ì¢Œìš°
+  if((dir1 + dir2) % 4 == 1)
+    return -1;
+
+  // êº¾ì´ëŠ” ê²½ìš°
+  return 1;
 }
 
-// ´ÙÀ½ À§Ä¡·ÎÀÇ ¹æÇâ ±¸ÇÏ±â
-int cal_dir(int y, int x, int ny, int nx)
+void bfs()
 {
-	// »óÇÏÁÂ¿ì 0123
-	if (y > ny && x == nx)
-		return 0;
-	else if (y < ny && x == nx)
-		return 1;
-	else if (y == ny && x > nx)
-		return 2;
-	else if (y == ny && x < nx)
-		return 3;
-	else
-		return -1;
-}
+  queue<pair<pair<int, int>, pair<int, int>>> q;
+  // {{êº¾ì¸ íšŸìˆ˜, ë°©í–¥}, {í˜„ì¬ ìœ„ì¹˜}}
 
-int bfs()
-{
-	// ¿ì¼±¼øÀ§ Å¥ ¿À¸§Â÷¼ø Á¤·Ä
-	// Ã¼Å© °ª -1ÀÌ¸é °»½ÅÇÏ°í Å¥ »ğÀÔ
-	// ¾Æ´Ï¸é Ã¼Å© °ªÀÌ ÀÛ¾ÆÁö´Â °æ¿ì¸¸ Å¥ »ğÀÔ
-	// Å¥ : { {°Å¿ï ¼³Ä¡ È½¼ö, ºû ¹æÇâ}, { À§Ä¡ y, x} }
-	// ºû ¹æÇâ : 0123 ¼ø »óÇÏÁÂ¿ì
-	priority_queue<pair<pair<int,int>, pair<int, int>>, vector<pair<pair<int,int>,pair<int,int>>>, greater<pair<pair<int,int>, pair<int,int>>> >q;
-	//queue < pair<pair<int, int>, pair<int, int>>>q;
-	q.push({ {0,0},{p1.first, p1.second} });
-	q.push({ {0,1},{p1.first, p1.second} });
-	q.push({ {0,2},{p1.first, p1.second} });
-	q.push({ {0,3},{p1.first, p1.second} });
-	check[p1.first][p1.second] = 0;
+  int sy = src.first;
+  int sx = src.second;
+  visited[sy][sx] = true;
+  corner[sy][sx][0] = 0;
+  corner[sy][sx][1] = 0;
+  corner[sy][sx][2] = 0;
+  corner[sy][sx][3] = 0;
+  
+  // ì‹œì‘ì  ìƒí•˜ì¢Œìš° ì§€ì 
+  for(int i = 0; i < 4; i++) {
+    int ny = sy + dy[i];
+    int nx = sx + dx[i];
 
-	int result = 0;
+    // ë²—ì–´ë‚¨
+    if(ny < 0 || nx < 0 || ny >= h || nx >= w)
+      continue;
+    // ë²½
+    if(map[ny][nx] == '*')
+      continue;
+    // ë„ì°©
+    if(map[ny][nx] == 'C') {
+      cout << 0;
+      return;
+    }
 
-	while (!q.empty())
-	{
-		int y = q.top().second.first;
-		int x = q.top().second.second;
-		int cnt = q.top().first.first;
-		int dir = q.top().first.second;
-		//int y = q.front().second.first;
-		//int x = q.front().second.second;
-		//int cnt = q.front().first.first;
-		//int dir = q.front().first.second;
+    q.push({{0, i}, {ny, nx}});
+    visited[ny][nx] = true;
+    corner[ny][nx][i] = 0;
+  }
 
-		if (y == p2.first && x == p2.second) {
-			q.pop();
-			continue;
-		}
+  while(!q.empty()) {
+    int cnt = q.front().first.first;
+    int dir = q.front().first.second;
+    int y = q.front().second.first;
+    int x = q.front().second.second;
 
-		q.pop();
+    q.pop();
 
-		for (int i = 0; i < 4; i++) {
-			int ny = y + dy[i];
-			int nx = x + dx[i];
+    // ë„ì°©
+    if(y == dst.first && x == dst.second) {
+      corner[y][x][dir] = min(corner[y][x][dir], cnt);
+      continue;
+    }
 
-			int ndir = cal_dir(y, x, ny, nx);
-			int ncnt = cnt;
+    for(int i = 0; i < 4; i++) {
+      int ny = y + dy[i];
+      int nx = x + dx[i];
+      int ncnt = cnt;
 
-			if (ny >= 0 && ny < h && nx >= 0 && nx < w) {
-				// º®ÀÌ¸é ÁøÇà ºÒ°¡
-				if (map[ny][nx] == '*')
-					continue;
-				// »óÇÏÁÂ¿ì ¾Æ´Ñ °æ¿ì
-				if (ndir == -1)
-					continue;
-				
-				int pos = possible(dir, ndir);
-				// ¹İ´ë¹æÇâÀ¸·Î ºû ¸ø¿òÁ÷ÀÓ
-				if (pos == -1)
-					continue;
-				else {
-					// ²ªÀÌ´Â °æ¿ì
-					if (pos == 1)
-						ncnt++;
-					if (check[ny][nx] >= ncnt) {
-						check[ny][nx] = ncnt;
-						q.push({ {ncnt, ndir},{ny,nx} });
-					}
-				}
-			}
-		}
-	}
+      // êº¾ì„
+      int change = changeDir(i, dir);
+      // ë¶ˆê°€ëŠ¥í•œ ê²½ìš°
+      if(change == -1)
+        continue;
+      ncnt += change;
 
-	result = check[p2.first][p2.second];
-	return result;
+      // ë²—ì–´ë‚¨
+      if(ny < 0 || nx < 0 || ny >= h || nx >= w)
+        continue;
+      
+      // ë²½
+      if(map[ny][nx] == '*')
+        continue;
+      
+      // í•œ ë²ˆë„ ì•ˆ ì˜¨ ê³³
+      if(visited[ny][nx] == false) {
+        q.push({{ncnt, i}, {ny, nx}});
+        visited[ny][nx] = true;
+        corner[ny][nx][i] = ncnt;
+      }
+
+      // ê°”ë˜ ê³³
+      else {
+        // ë” ì¢‹ì€ ê²½ë¡œ
+        if(ncnt < corner[ny][nx][i]) {
+          q.push({{ncnt, i}, {ny, nx}});
+          corner[ny][nx][i] = ncnt;
+        }
+        // ì¹´ìš´íŠ¸ëŠ” ê°™ì§€ë§Œ ë°©í–¥ ë‹¤ë¥¸ ê²½ìš°
+        else if(ncnt == corner[ny][nx][i] && i != dir) {
+          q.push({{ncnt, i}, {ny, nx}});
+        }
+      }
+    }
+  }
+
+  int res = 987654321;
+  for(int i = 0; i < 4; i++) {
+    res = min(res, corner[dst.first][dst.second][i]);
+  }
+  cout << res;
+  return;
 }
 
 int main()
 {
-	ios::sync_with_stdio(false);
-	cin.tie(NULL);
-	cout.tie(NULL);
+  ios_base :: sync_with_stdio(false);
+  cin.tie(NULL);
+  cout.tie(NULL); 
 
-	//freopen("input.txt", "r", stdin);
-
-	make_map();
-	int result = bfs();
-
-	cout << result;
+  init();
+  bfs();
 }
